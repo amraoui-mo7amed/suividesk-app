@@ -1,4 +1,5 @@
 import * as Network from 'expo-network';
+import { Platform } from 'react-native';
 import {
   getEmployees,
   getTasks,
@@ -10,6 +11,27 @@ import {
   getLastPcIp
 } from './storage';
 import { SyncPreviewData, SyncResult, Employee, TaskItem, DiscoveredPeer } from '../types';
+
+/**
+ * Announces this mobile device to the Desktop PC sync server
+ */
+export async function announceDeviceToPc(pcIp: string, port = 4850): Promise<void> {
+  try {
+    const deviceId = await getDeviceId();
+    const cleanIp = pcIp.trim();
+    if (!cleanIp) return;
+    await fetch(`http://${cleanIp}:${port}/api/sync/announce`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId,
+        deviceName: `Smartphone (${Platform.OS === 'android' ? 'Android' : 'iOS'})`,
+        deviceType: 'phone',
+        version: '1.5.0'
+      })
+    });
+  } catch {}
+}
 
 /**
  * Checks a specific host IP on port 4850 for an active SuiviDesk Sync service.
@@ -29,6 +51,7 @@ export async function checkPeer(ip: string, port = 4850, timeoutMs = 800): Promi
     if (!res.ok) return null;
     const data = await res.json();
     if (data?.deviceId) {
+      announceDeviceToPc(cleanIp, port);
       return {
         ip: cleanIp,
         port,
