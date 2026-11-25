@@ -6,9 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#003A6B"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "dz.cnas.suividesk"
@@ -27,6 +24,16 @@
     },
     "web": {
       "favicon": "./assets/CNAS_logo.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ]
   }
 }

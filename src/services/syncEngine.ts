@@ -1,3 +1,4 @@
+import * as Network from 'expo-network';
 import {
   getEmployees,
   getTasks,
@@ -5,9 +6,130 @@ import {
   saveRawEmployees,
   saveRawTasks,
   getDeviceId,
-  saveLastPcIp
+  saveLastPcIp,
+  getLastPcIp
 } from './storage';
-import { SyncPreviewData, SyncResult, Employee, TaskItem } from '../types';
+import { SyncPreviewData, SyncResult, Employee, TaskItem, DiscoveredPeer } from '../types';
+
+/**
+ * Checks a specific host IP on port 4850 for an active SuiviDesk Sync service.
+ */
+export async function checkPeer(ip: string, port = 4850, timeoutMs = 800): Promise<DiscoveredPeer | null> {
+  const cleanIp = ip.trim();
+  if (!cleanIp) return null;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`http://${cleanIp}:${port}/api/sync/info`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(id);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.deviceId) {
+      return {
+        ip: cleanIp,
+        port,
+        name: data.workstationName || `PC-${cleanIp}`,
+        deviceId: data.deviceId,
+        version: data.version
+      };
+    }
+    return null;
+  } catch {
+    clearTimeout(id);
+    return null;
+  }
+}
+
+/**
+ * Automatically discovers all active SuiviDesk PCs connected within the same Wi-Fi / local network.
+ * Calls onPeerDiscovered progressively as each PC is found so the UI updates instantly.
+ */
+export async function scanLanForPcs(
+  onPeerDiscovered?: (peer: DiscoveredPeer) => void
+): Promise<DiscoveredPeer[]> {
+  const peers: DiscoveredPeer[] = [];
+  const seenIps = new Set<string>();
+
+  const registerPeer = (peer: DiscoveredPeer) => {
+    if (!seenIps.has(peer.ip)) {
+      seenIps.add(peer.ip);
+      peers.push(peer);
+      if (onPeerDiscovered) onPeerDiscovered(peer);
+    }
+  };
+
+  // 1. Check priority candidates first for ultra-fast response
+  const priorityList = ['10.0.2.2', '127.0.0.1'];
+  try {
+    const lastIp = await getLastPcIp();
+    if (lastIp && !priorityList.includes(lastIp)) {
+      priorityList.unshift(lastIp);
+    }
+  } catch {}
+
+  await Promise.all(
+    priorityList.map(async (ip) => {
+      const peer = await checkPeer(ip, 4850, 700);
+      if (peer) registerPeer(peer);
+    })
+  );
+
+  // 2. Discover local subnet using expo-network
+  const subnets: string[] = [];
+  try {
+    const localIp = await Network.getIpAddressAsync();
+    if (localIp && localIp !== '0.0.0.0' && !localIp.startsWith('127.')) {
+      const parts = localIp.split('.');
+      if (parts.length === 4) {
+        subnets.push(`${parts[0]}.${parts[1]}.${parts[2]}`);
+      }
+    }
+  } catch (err) {
+    console.warn('Impossible de récupérer l’IP locale du mobile:', err);
+  }
+
+  // Include subnet from last saved PC IP if available
+  for (const prio of priorityList) {
+    const parts = prio.split('.');
+    if (parts.length === 4 && parts[0] === '192' && parts[1] === '168') {
+      const s = `${parts[0]}.${parts[1]}.${parts[2]}`;
+      if (!subnets.includes(s)) subnets.push(s);
+    }
+  }
+
+  if (subnets.length === 0) {
+    subnets.push('192.168.1', '192.168.0');
+  }
+
+  // 3. Scan the subnet in parallel batches
+  for (const subnet of subnets) {
+    const allIps: string[] = [];
+    for (let i = 1; i <= 254; i++) {
+      const targetIp = `${subnet}.${i}`;
+      if (!seenIps.has(targetIp)) {
+        allIps.push(targetIp);
+      }
+    }
+
+    // Process in chunks of 28 concurrent requests
+    const CHUNK_SIZE = 28;
+    for (let i = 0; i < allIps.length; i += CHUNK_SIZE) {
+      const chunk = allIps.slice(i, i + CHUNK_SIZE);
+      await Promise.all(
+        chunk.map(async (ip) => {
+          const peer = await checkPeer(ip, 4850, 800);
+          if (peer) registerPeer(peer);
+        })
+      );
+    }
+  }
+
+  return peers;
+}
 
 export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
@@ -60,7 +182,18 @@ export async function getSyncPreview(remoteIp: string, remotePort = 4850): Promi
     await saveLastPcIp(cleanIp);
     return { success: true, preview };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Impossible de contacter le PC SuiviDesk.' };
+    const rawMsg = err?.message || '';
+    let friendlyError = rawMsg;
+    const target = remoteIp ? remoteIp.trim() : 'PC';
+    if (
+      rawMsg.includes('fetch failed') ||
+      rawMsg.includes('Network request failed') ||
+      rawMsg.includes('unreachable') ||
+      rawMsg.includes('Délai')
+    ) {
+      friendlyError = `PC inaccessible à l'adresse ${target}:4850.\n\nVeuillez vérifier que :\n1. SuiviDesk est lancé sur le PC dans l'onglet 'Synchronisation'.\n2. L'adresse IP correspond exactement à celle affichée sur votre PC.\n3. Le smartphone et le PC sont sur le même réseau Wi-Fi.\n4. Le pare-feu Windows autorise les connexions entrantes sur le port 4850.`;
+    }
+    return { success: false, error: friendlyError };
   }
 }
 
@@ -141,6 +274,17 @@ export async function executeSync(remoteIp: string, remotePort = 4850): Promise<
       conflictCount: 0
     };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Erreur lors de la synchronisation.' };
+    const rawMsg = err?.message || '';
+    let friendlyError = rawMsg;
+    const target = remoteIp ? remoteIp.trim() : 'PC';
+    if (
+      rawMsg.includes('fetch failed') ||
+      rawMsg.includes('Network request failed') ||
+      rawMsg.includes('unreachable') ||
+      rawMsg.includes('Délai')
+    ) {
+      friendlyError = `PC inaccessible à l'adresse ${target}:4850 pendant la synchronisation. Vérifiez la connexion Wi-Fi et que SuiviDesk reste ouvert sur le PC.`;
+    }
+    return { success: false, error: friendlyError };
   }
 }

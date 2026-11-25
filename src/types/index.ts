@@ -50,6 +50,14 @@ export interface TaskItem {
   is_deleted?: number;
 }
 
+export interface DiscoveredPeer {
+  ip: string;
+  port: number;
+  name: string;
+  deviceId: string;
+  version?: string;
+}
+
 export interface SyncStatus {
   deviceId: string;
   workstationName: string;
