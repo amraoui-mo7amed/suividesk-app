@@ -1,0 +1,81 @@
+name: Build Android APK (Expo React Native)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install npm dependencies
+        run: npm install
+
+      - name: Prebuild Android native project with Expo
+        run: npx expo prebuild --platform android --clean
+
+      - name: Add Google Maven Central Mirror
+        run: |
+          sed -i "s|mavenCentral()|maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }\n    mavenCentral()|g" android/build.gradle
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Locate and Rename APK
+        run: |
+          mkdir -p release-apk
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: No APK found!"
+            exit 1
+          fi
+          echo "Found APK at $APK_PATH"
+          cp "$APK_PATH" release-apk/SuiviDesk-App-1.5.0.apk
+          ls -lh release-apk/
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SuiviDesk-App-1.5.0-APK
+          path: release-apk/SuiviDesk-App-1.5.0.apk
+          retention-days: 30
+
+      - name: Publish or Update GitHub Release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: SuiviDesk Mobile v1.5.0 (Expo & React Native)
+          tag_name: ${{ github.ref_name || 'v1.5.0' }}
+          draft: false
+          prerelease: false
+          files: release-apk/SuiviDesk-App-1.5.0.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

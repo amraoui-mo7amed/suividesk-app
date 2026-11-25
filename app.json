@@ -1,25 +1,32 @@
 {
   "expo": {
-    "name": "suividesk-app",
+    "name": "SuiviDesk CNAS",
     "slug": "suividesk-app",
-    "version": "1.0.0",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#003A6B"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "dz.cnas.suividesk"
     },
     "android": {
+      "package": "dz.cnas.suividesk",
+      "versionCode": 150,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#003A6B"
       },
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/CNAS_logo.png"
     }
   }
 }
