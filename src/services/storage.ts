@@ -30,142 +30,35 @@ export async function getDeviceId(): Promise<string> {
 
 export async function getLastPcIp(): Promise<string> {
   const ip = await AsyncStorage.getItem(STORAGE_KEYS.LAST_PC_IP);
-  return ip || '192.168.1.45';
+  return ip || '';
 }
 
 export async function saveLastPcIp(ip: string): Promise<void> {
   await AsyncStorage.setItem(STORAGE_KEYS.LAST_PC_IP, ip.trim());
 }
 
-// Initial mock data
-const INITIAL_EMPLOYEES: Employee[] = [
-  {
-    id: 1,
-    sync_uuid: 'emp-001-cnas',
-    civilite: 'Monsieur',
-    full_name: 'Ahmed Benali',
-    file_name: 'attestation_ahmed.pdf',
-    created_at: '2026-11-20T08:00:00Z',
-    updated_at: '2026-11-24T10:00:00Z',
-    is_deleted: 0
-  },
-  {
-    id: 2,
-    sync_uuid: 'emp-002-cnas',
-    civilite: 'Madame',
-    full_name: 'Samira Khelifi',
-    file_name: 'fiche_recrutement.pdf',
-    created_at: '2026-11-21T09:00:00Z',
-    updated_at: '2026-11-24T11:00:00Z',
-    is_deleted: 0
-  },
-  {
-    id: 3,
-    sync_uuid: 'emp-003-cnas',
-    civilite: 'Monsieur',
-    full_name: 'Karim Mansouri',
-    file_name: 'decision_affectation.pdf',
-    created_at: '2026-11-22T08:30:00Z',
-    updated_at: '2026-11-24T14:00:00Z',
-    is_deleted: 0
-  }
-];
-
-const INITIAL_TASKS: TaskItem[] = [
-  {
-    id: 1,
-    sync_uuid: 'task-001-cnas',
-    agent_id: 1,
-    titre: 'Contrôle employeur et apurement cotisations',
-    sujet: 'Vérification bordereaux trimestriels CNAS',
-    personne_cible: 'Entreprise Nationale Travaux BTP',
-    reference_dossier: 'CNAS-ALG-2026-4412',
-    wilaya: 'Alger',
-    priorite: 'Haute',
-    date_courrier: '2026-11-20',
-    date_distribution: '2026-11-21',
-    date_debut: '2026-11-21',
-    date_finale: '2026-11-25',
-    etat_courrier: 'traite',
-    duree_traitement_jours: 4,
-    note: 'Dossier validé et transmis au chef de centre.',
-    note_finale: 'Approbation finale reçue.',
-    created_at: '2026-11-20T08:30:00Z',
-    updated_at: '2026-11-24T09:00:00Z',
-    is_deleted: 0
-  },
-  {
-    id: 2,
-    sync_uuid: 'task-002-cnas',
-    agent_id: 1,
-    titre: 'Instruction recours prestation maladie',
-    sujet: 'Examen pièces complémentaires feuille de soins',
-    personne_cible: 'Assuré social M. Bouzid',
-    reference_dossier: 'CNAS-MED-8819',
-    wilaya: 'Oran',
-    priorite: 'Moyenne',
-    date_courrier: '2026-11-22',
-    date_distribution: '2026-11-23',
-    date_debut: '2026-11-23',
-    date_finale: '2026-11-28',
-    etat_courrier: 'en_cours',
-    note: 'En attente de la prescription médicale conforme.',
-    created_at: '2026-11-22T09:00:00Z',
-    updated_at: '2026-11-24T12:00:00Z',
-    is_deleted: 0
-  },
-  {
-    id: 3,
-    sync_uuid: 'task-003-cnas',
-    agent_id: 2,
-    titre: 'Audit trimestriel centre de paiement',
-    sujet: 'Rapprochement des bordereaux de remboursement',
-    personne_cible: 'Centre de paiement Bab Ezzouar',
-    reference_dossier: 'AUDIT-2026-T4',
-    wilaya: 'Constantine',
-    priorite: 'Urgente',
-    date_courrier: '2026-11-23',
-    date_distribution: '2026-11-24',
-    date_debut: '2026-11-24',
-    date_finale: '2026-11-26',
-    etat_courrier: 'non_traite',
-    note: 'Dossier prioritaire reçu ce matin.',
-    created_at: '2026-11-23T10:00:00Z',
-    updated_at: '2026-11-24T15:00:00Z',
-    is_deleted: 0
-  },
-  {
-    id: 4,
-    sync_uuid: 'task-004-cnas',
-    agent_id: 3,
-    titre: 'Mise à jour carte Chifa & ayants droit',
-    sujet: 'Renouvellement annuel des droits assurés',
-    personne_cible: 'Guichet Unique Agence',
-    reference_dossier: 'CHIFA-99120',
-    wilaya: 'Sétif',
-    priorite: 'Moyenne',
-    date_courrier: '2026-11-21',
-    date_distribution: '2026-11-22',
-    date_debut: '2026-11-22',
-    date_finale: '2026-11-29',
-    etat_courrier: 'traite',
-    duree_traitement_jours: 3,
-    note: 'Délivrance de la carte effectuée.',
-    created_at: '2026-11-21T11:00:00Z',
-    updated_at: '2026-11-24T16:00:00Z',
-    is_deleted: 0
-  }
-];
+// Initial clean empty data on fresh install
+const INITIAL_EMPLOYEES: Employee[] = [];
+const INITIAL_TASKS: TaskItem[] = [];
 
 export async function initializeData(): Promise<void> {
   const isInit = await AsyncStorage.getItem(STORAGE_KEYS.INITIALIZED);
   if (!isInit) {
-    await AsyncStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify(INITIAL_EMPLOYEES));
-    await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(INITIAL_TASKS));
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.SECURITY,
-      JSON.stringify({ enabled: false, autoLockMinutes: 0 })
-    );
+    const existingEmps = await AsyncStorage.getItem(STORAGE_KEYS.EMPLOYEES);
+    if (!existingEmps) {
+      await AsyncStorage.setItem(STORAGE_KEYS.EMPLOYEES, JSON.stringify([]));
+    }
+    const existingTasks = await AsyncStorage.getItem(STORAGE_KEYS.TASKS);
+    if (!existingTasks) {
+      await AsyncStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
+    }
+    const existingSec = await AsyncStorage.getItem(STORAGE_KEYS.SECURITY);
+    if (!existingSec) {
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.SECURITY,
+        JSON.stringify({ enabled: false, autoLockMinutes: 0 })
+      );
+    }
     await AsyncStorage.setItem(STORAGE_KEYS.INITIALIZED, 'true');
   }
 }
